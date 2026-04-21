@@ -1,17 +1,11 @@
 """
-EE303 Problem 2(b): Multilayer Reflection and Transmission Coefficients
-========================================================================
-
 A plane wave at 1 GHz, linearly polarized along x-hat and with amplitude
 1 V/m, is normally incident on the stack:
 
-    Air  ->  Dry Skin (2 mm)  ->  Infiltrated Fat (5 mm)  ->  Muscle
+Air -> Dry Skin -> Infiltrated Fat -> Muscle
 
-We compute the generalized (multilayer) reflection coefficient R_tilde and
+We compute the reflection coefficient R_tilde and 
 transmission coefficient S at each of the three interfaces.
-
-Convention: e^{+j*omega*t} (engineering), so lossy media have Im(eps_r) < 0
-and waves traveling in +z have the form e^{-j*k*z}.
 """
 
 import numpy as np
@@ -41,14 +35,7 @@ def cole_cole(omega, params):
     can use these quantities to solve for the reflection and transmittion coefficient
     at each interface).
 
-    eps_r = eps_inf + sum_n [ delta_eps_n / (1 + (j*omega*tau_n)^(1-alpha_n)) ]
-            - j * sigma / (omega * eps_0)
-
-    params: dict with keys
-        eps_inf, sigma,
-        deltas = [de1, de2, de3, de4],
-        taus   = [t1, t2, t3, t4],        (seconds)
-        alphas = [a1, a2, a3, a4].
+    eps_r = eps_inf + sum_n [ delta_eps_n / (1 + (j*omega*tau_n)^(1-alpha_n)) ] - j * sigma / (omega * eps_0)
     """
     eps_r = params['eps_inf'] + 0j
     for de, tau, a in zip(params['deltas'], params['taus'], params['alphas']):
@@ -59,8 +46,8 @@ def cole_cole(omega, params):
     return eps_r
 
 
-# Cole-Cole parameters from Gabriel et al. (lecture 3, slide 25).
-# Times converted to seconds: tau1 in ps, tau2 in ns, tau3 in us, tau4 in ms.
+#Cole-Cole parameters lecture 3, slide 24.
+#*NOTE: Times are converted to seconds: tau1 in ps, tau2 in ns, tau3 in us, tau4 in ms.
 skin = {
     'eps_inf': 4.0,
     'deltas':  [32.0, 1100.0, 0.0, 0.0],
@@ -83,9 +70,9 @@ muscle = {
     'sigma':   0.200,
 }
 
-# Build the per-layer arrays.
-# Index convention: 0 = air, 1 = skin, 2 = fat, 3 = muscle.
-# Thickness is meaningful only for the finite (middle) layers.
+#Build the per-layer arrays.
+#Indexing works as follows: 0 = air, 1 = skin, 2 = fat, 3 = muscle.
+#Thickness is meaningful for the finite (middle) layers only.
 eps_r = np.array([
     1.0 + 0j,
     cole_cole(omega, skin),
@@ -110,13 +97,12 @@ k   = k0 * np.sqrt(eps_r)
 print()
 print("Intrinsic impedance and wavenumber per layer:")
 for name, et, kn in zip(layer_names, eta, k):
-    print(f"  {name:18s}  eta = {et.real:8.3f} + ({et.imag:+8.3f})j Ohm"
-          f"    k = {kn.real:9.3f} + ({kn.imag:+9.3f})j rad/m")
+    print(f"{name:18s}  eta = {et.real:8.3f} + ({et.imag:+8.3f})j Ohm"
+          f"k = {kn.real:9.3f} + ({kn.imag:+9.3f})j rad/m")
 
-# Calculate R and 
-# Interface n is between layer n and layer n+1, n = 0, 1, 2.
-# R_{n,n+1} = (eta_{n+1} - eta_n) / (eta_{n+1} + eta_n)
-# T_{n,n+1} = 2*eta_{n+1} / (eta_{n+1} + eta_n)
+#Calculate R and T as follows: R_{n,n+1} = (eta_{n+1} - eta_n) / (eta_{n+1} + eta_n), 
+#T_{n,n+1} = 2*eta_{n+1} / (eta_{n+1} + eta_n)
+#(Interface n is between layer n and layer n+1, n = 0, 1, 2.)
 N_interfaces = 3
 R = np.zeros(N_interfaces, dtype=complex)
 T = np.zeros(N_interfaces, dtype=complex)
@@ -126,42 +112,39 @@ for n in range(N_interfaces):
     T[n] = 2.0 * eta[n+1]       / (eta[n+1] + eta[n])
 
 interface_names = [
-    'Air  -> Skin   (0,1)',
-    'Skin -> Fat    (1,2)',
-    'Fat  -> Muscle (2,3)',
+    'Air -> Skin (0,1 interface)',
+    'Skin -> Fat (1,2 interface)',
+    'Fat -> Muscle (2,3 interface)',
 ]
 
 print()
-print("Single-interface coefficients (bare R, T)")
+print("Single-interface coefficients (R, T)")
 for name, R_val, T_val in zip(interface_names, R, T):
-    print(f"  {name}:  R = {R_val.real:+.6f} + ({R_val.imag:+.6f})j"
-          f"   T = {T_val.real:+.6f} + ({T_val.imag:+.6f})j")
+    print(f"{name}:  R = {R_val.real:+.6f} + ({R_val.imag:+.6f})j"
+          f"T = {T_val.real:+.6f} + ({T_val.imag:+.6f})j")
 
-# Sanity check: T = 1 + R must hold at every interface.
+#Sanity check: T = 1 + R must hold at every interface.
 print()
-print("  Sanity check (should be ~0):  max |T - (1+R)| =",
+print("Sanity check (should be ~0):  max |T - (1+R)| =",
       np.max(np.abs(T - (1.0 + R))))
 
-# Generalized multilayer coefficients, recursion from the bottom up.
-#
-# Bottom interface (fat->muscle): muscle is semi-infinite, so nothing reflects
-# back from below.  R_tilde = R,  S = T.
-#
-# Moving up one interface, for n = N_interfaces-2, ..., 0:
-#   phase = exp(-j * 2 * k_{n+1} * thickness_{n+1})
-#   R_tilde_{n,n+1} = (R_{n,n+1} + R_tilde_{n+1,n+2} * phase)
-#                     / (1 + R_{n,n+1} * R_tilde_{n+1,n+2} * phase)
-#   S_{n,n+1} = T_{n,n+1} / (1 + R_{n,n+1} * R_tilde_{n+1,n+2} * phase)
+#R_tilde and S, recursion from the bottom up.
+#We start at the bottom interface (fat->muscle): muscle is semi-infinite,
+#so nothing reflects back from below -> R_tilde = R,  S = T (base case)
+#Moving up one interface, (iterate until we reach the top layer):
+#phase = exp(-j * 2 * k_{n+1} * thickness_{n+1})
+#R_tilde_{n,n+1} = (R_{n,n+1} + R_tilde_{n+1,n+2} * phase) / (1 + R_{n,n+1} * R_tilde_{n+1,n+2} * phase)
+#S_{n,n+1} = T_{n,n+1} / (1 + R_{n,n+1} * R_tilde_{n+1,n+2} * phase)
 R_tilde = np.zeros(N_interfaces, dtype=complex)
 S       = np.zeros(N_interfaces, dtype=complex)
 
-# Base case: bottom-most interface.
+#Base case: bottom-most interface.
 R_tilde[-1] = R[-1]
 S[-1]       = T[-1]
 
-# Recursion upward.
+#Recursion upward.
 for n in range(N_interfaces - 2, -1, -1):
-    # Round-trip propagation factor through layer n+1.
+    #Round-trip propagation factor through layer n+1.
     phase = np.exp(-1j * 2.0 * k[n+1] * thickness[n+1])
     denom = 1.0 + R[n] * R_tilde[n+1] * phase
     R_tilde[n] = (R[n] + R_tilde[n+1] * phase) / denom
@@ -175,17 +158,3 @@ for name, Rt, Sn in zip(interface_names, R_tilde, S):
           f"|R_tilde| = {abs(Rt):.4f}")
     print(f"S = {Sn.real:+.6f} + ({Sn.imag:+.6f})j"
           f"|S| = {abs(Sn):.4f}")
-
-# Power sanity check at the top interface (air -> stack).
-# Incident medium is lossless (air), so:
-#   Fraction of incident power reflected = |R_tilde_{0,1}|^2.
-#   Fraction not reflected (= transmitted into stack + dissipated) = 1 - |R_t|^2.
-# Inside the stack, power is genuinely dissipated in the lossy layers, so we
-# cannot cleanly split "transmitted to muscle" from "absorbed in skin+fat"
-# without integrating Poynting's theorem. The top-level |R|^2 budget is the
-# most useful single sanity check.
-# print()
-# print("Power budget at the air-skin interface:")
-# P_refl = abs(R_tilde[0]) ** 2
-# print(f"|R_tilde_01|^2  = {P_refl:.4f}   (fraction of incident power reflected)")
-# print(f"1 - |R_tilde_01|^2 = {1 - P_refl:.4f}   (enters + is dissipated in the stack)")
