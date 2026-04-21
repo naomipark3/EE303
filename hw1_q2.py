@@ -1,9 +1,7 @@
 """
 A plane wave at 1 GHz, linearly polarized along x-hat and with amplitude
 1 V/m, is normally incident on the stack:
-
 Air -> Dry Skin -> Infiltrated Fat -> Muscle
-
 We compute the reflection coefficient R_tilde and 
 transmission coefficient S at each of the three interfaces.
 """
@@ -12,8 +10,8 @@ import numpy as np
 
 #Physical constants and operating point
 eps_0 = 8.8541878128e-12    #F/m
-mu_0  = 1.25663706212e-6    #H/m
-c0    = 1.0 / np.sqrt(eps_0 * mu_0)
+mu_0 = 1.25663706212e-6    #H/m
+c0 = 1.0 / np.sqrt(eps_0 * mu_0)
 eta_0 = np.sqrt(mu_0 / eps_0)
 
 f = 1.0e9                    #1 GHz
@@ -50,24 +48,24 @@ def cole_cole(omega, params):
 #*NOTE: Times are converted to seconds: tau1 in ps, tau2 in ns, tau3 in us, tau4 in ms.
 skin = {
     'eps_inf': 4.0,
-    'deltas':  [32.0, 1100.0, 0.0, 0.0],
-    'taus':    [7.23e-12, 32.48e-9, 0.0, 0.0],
-    'alphas':  [0.00, 0.20, 0.0, 0.0],
-    'sigma':   0.0002,
+    'deltas': [32.0, 1100.0, 0.0, 0.0],
+    'taus': [7.23e-12, 32.48e-9, 0.0, 0.0],
+    'alphas': [0.00, 0.20, 0.0, 0.0],
+    'sigma': 0.0002,
 }
 fat = {
     'eps_inf': 2.5,
-    'deltas':  [9.0, 35.0, 3.3e4, 1.0e7],
-    'taus':    [7.96e-12, 15.92e-9, 159.15e-6, 15.915e-3],
-    'alphas':  [0.20, 0.10, 0.05, 0.01],
-    'sigma':   0.0350,
+    'deltas': [9.0, 35.0, 3.3e4, 1.0e7],
+    'taus': [7.96e-12, 15.92e-9, 159.15e-6, 15.915e-3],
+    'alphas': [0.20, 0.10, 0.05, 0.01],
+    'sigma': 0.0350,
 }
 muscle = {
     'eps_inf': 4.0,
-    'deltas':  [50.0, 7000.0, 1.2e6, 2.5e7],
-    'taus':    [7.23e-12, 353.68e-9, 318.31e-6, 2.274e-3],
-    'alphas':  [0.10, 0.10, 0.10, 0.00],
-    'sigma':   0.200,
+    'deltas': [50.0, 7000.0, 1.2e6, 2.5e7],
+    'taus': [7.23e-12, 353.68e-9, 318.31e-6, 2.274e-3],
+    'alphas': [0.10, 0.10, 0.10, 0.00],
+    'sigma': 0.200,
 }
 
 #Build the per-layer arrays.
@@ -109,7 +107,7 @@ T = np.zeros(N_interfaces, dtype=complex)
 
 for n in range(N_interfaces):
     R[n] = (eta[n+1] - eta[n]) / (eta[n+1] + eta[n])
-    T[n] = 2.0 * eta[n+1]       / (eta[n+1] + eta[n])
+    T[n] = 2.0 * eta[n+1] / (eta[n+1] + eta[n])
 
 interface_names = [
     'Air -> Skin (0,1 interface)',
@@ -120,13 +118,12 @@ interface_names = [
 print()
 print("Single-interface coefficients (R, T)")
 for name, R_val, T_val in zip(interface_names, R, T):
-    print(f"{name}:  R = {R_val.real:+.6f} + ({R_val.imag:+.6f})j"
+    print(f"{name}: R = {R_val.real:+.6f} + ({R_val.imag:+.6f})j"
           f"T = {T_val.real:+.6f} + ({T_val.imag:+.6f})j")
 
 #Sanity check: T = 1 + R must hold at every interface.
 print()
-print("Sanity check (should be ~0):  max |T - (1+R)| =",
-      np.max(np.abs(T - (1.0 + R))))
+print("Sanity check (should be ~0):  max |T - (1+R)| =", np.max(np.abs(T - (1.0 + R))))
 
 #R_tilde and S, recursion from the bottom up.
 #We start at the bottom interface (fat->muscle): muscle is semi-infinite,
@@ -136,11 +133,11 @@ print("Sanity check (should be ~0):  max |T - (1+R)| =",
 #R_tilde_{n,n+1} = (R_{n,n+1} + R_tilde_{n+1,n+2} * phase) / (1 + R_{n,n+1} * R_tilde_{n+1,n+2} * phase)
 #S_{n,n+1} = T_{n,n+1} / (1 + R_{n,n+1} * R_tilde_{n+1,n+2} * phase)
 R_tilde = np.zeros(N_interfaces, dtype=complex)
-S       = np.zeros(N_interfaces, dtype=complex)
+S = np.zeros(N_interfaces, dtype=complex)
 
 #Base case: bottom-most interface.
 R_tilde[-1] = R[-1]
-S[-1]       = T[-1]
+S[-1] = T[-1]
 
 #Recursion upward.
 for n in range(N_interfaces - 2, -1, -1):
@@ -148,13 +145,11 @@ for n in range(N_interfaces - 2, -1, -1):
     phase = np.exp(-1j * 2.0 * k[n+1] * thickness[n+1])
     denom = 1.0 + R[n] * R_tilde[n+1] * phase
     R_tilde[n] = (R[n] + R_tilde[n+1] * phase) / denom
-    S[n]       = T[n] / denom
+    S[n] = T[n] / denom
 
 print()
 print("Reflection coefficient R_tilde_{n,n+1} and transmission coefficient S_{n,n+1}")
 for name, Rt, Sn in zip(interface_names, R_tilde, S):
     print(f"{name}:")
-    print(f"R_tilde = {Rt.real:+.6f} + ({Rt.imag:+.6f})j"
-          f"|R_tilde| = {abs(Rt):.4f}")
-    print(f"S = {Sn.real:+.6f} + ({Sn.imag:+.6f})j"
-          f"|S| = {abs(Sn):.4f}")
+    print(f"R_tilde = {abs(Rt):.4f}")
+    print(f"S = {abs(Sn):.4f}")
